@@ -17,24 +17,24 @@ const browserDistFolder = resolve(serverDistFolder, '../browser');
 const app = express();
 // app.use(helmet());
 
-// app.use((req, res, next) => {
-
-//   next();
-// });
-
-app.use(
-  helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-    },
-  })
-);
-
 app.use((req, res, next) => {
-  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+
   next();
 });
+
+// app.use(
+//   helmet.contentSecurityPolicy({
+//     directives: {
+//       defaultSrc: ["'self'"],
+//       scriptSrc: ["'self'"],
+//     },
+//   })
+// );
+
+// app.use((req, res, next) => {
+//   res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+//   next();
+// });
 
 app.use(
   express.static(browserDistFolder, {

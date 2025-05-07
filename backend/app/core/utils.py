@@ -25,12 +25,12 @@ def deactivate_user_appointments(user_id:int, db: Session = Depends(get_db)):
     updated_db = False
     if not user:
         raise HTTPException(status_code=404, detail=user_not_found)
-    if user.role == "patient":
+    if user.role_hash == hash_lookup("patient"):
         patient = db.query(Patient).filter(Patient.user_id == user_id).first()
         if not patient:
             raise HTTPException(status_code=404, detail= patient_not_found)
         appointments = db.query(Appointment).filter(Appointment.patient_id == patient.patient_id).all()
-    elif user.role == "doctor":
+    elif user.role_hash == hash_lookup( "doctor"):
         doctor = db.query(Doctor).filter(Doctor.user_id == user_id).first()
         if not doctor:
             raise HTTPException(status_code=404, detail= doctor_not_found)

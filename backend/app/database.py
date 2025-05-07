@@ -29,12 +29,13 @@ def create_admin_user():
 
     db: Session = SessionLocal()
 
-    admin_user = db.query(User).filter(User.username=='admin').first()
-    username = 'admin'
-    phone_number = '+212000000000'
-    email = 'admin@admin.com'
-    role = 'admin'
+    admin_user = db.query(User).filter(User.username_hash == hash_lookup('admin')).first()
+    
     if not admin_user:
+        username = 'admin'
+        phone_number = '+212000000000'
+        email = 'admin@admin.com'
+        role = 'admin'
         new_user = User(
             username = encrypt(username),
             username_hash = hash_lookup(username),

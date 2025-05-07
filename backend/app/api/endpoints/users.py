@@ -11,6 +11,7 @@ from models.admin import Admin
 from schemas.user import UserUpdate 
 from .appointments import deactivate_appointment, get_user_appointments_by_user_id
 from core.utils import get_current_admin, get_valid_user, is_email_valid, is_phone_number_valid, get_current_user, get_default_admin
+from core.encryption import hash_lookup, encrypt, decrypt
 from database import SessionLocal
 from core.messages import invalid_doctor_specialty, user_not_found , default_admin_update , general_privileges_update, invalid_name
 
@@ -37,11 +38,11 @@ def deactivate_expired_users(current_admin: User = Depends(get_default_admin)):
         patient_data = None
         doctor_data = None
         admin_data = None
-        if user.role =="patient":
+        if user.role_hash == hash_lookup("patient"):
             patient_data = db.query(Patient).filter(Patient.user_id == user.user_id, Patient.status_expiry <= date_today).first()
-        elif user.role == "doctor":
+        elif user.role_hash == hash_lookup("doctor"):
             doctor_data = db.query(Doctor).filter(Doctor.user_id == user.user_id, Doctor.status_expiry <= date_today).first()
-        elif user.role == "admin":
+        elif user.role_hash == hash_lookup("admin"):
             admin_data = db.query(Admin).filter(Admin.user_id == user.user_id, Admin.status_expiry <= date_today).first()
         if patient_data or  doctor_data or admin_data:
             deactivate_user(user.user_id, db)            
@@ -58,7 +59,7 @@ def deactivate_user(
     user =  get_valid_user(user_id, db)
     
     # set user_status to invalid and status_expiry date: 
-    if user.role == 'patient':
+    if user.role_hash == hash_lookup('patient'):
         search_db = db.query(Patient).filter(Patient.user_id == user_id).all()
         for current_user in search_db:
             if current_user.is_patient == True:
@@ -66,7 +67,7 @@ def deactivate_user(
                 current_user.status_expiry = datetime.now(timezone.utc)
                 db.add(current_user)
 
-    elif user.role == 'doctor':
+    elif user.role_hash == hash_lookup('doctor'):
         search_db = db.query(Doctor).filter(Doctor.user_id == user_id).all()
         for current_user in search_db:
             if current_user.is_doctor == True:
@@ -74,7 +75,7 @@ def deactivate_user(
                 current_user.status_expiry = datetime.now(timezone.utc)
                 db.add(current_user)
                 
-    elif user.role== 'admin':
+    elif user.role_hash== hash_lookup('admin'):
         search_db = db.query(Admin).filter(Admin.user_id == user_id).all()
         for current_user in search_db:
             if current_user.is_admin == True:
@@ -83,7 +84,7 @@ def deactivate_user(
                 db.add(current_user)
                 
     # Set scheduled appointments to CANCELLED
-    if user.role == 'patient' or user.role == 'doctor':
+    if user.role_hash == hash_lookup('patient') or user.role_hash == hash_lookup('doctor'):
         appointments = get_user_appointments_by_user_id(user_id, db)
         for appointment in appointments:
             if appointment.status!= "CANCELLED":
@@ -100,11 +101,10 @@ def deactivate_user(
 def get_user_role(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     user = db.query(User).filter(User.user_id == current_user.user_id).first()
     if not user:
-
         raise HTTPException(status_code=404, detail=user_not_found)
     else:
 
-        return user.role
+        return decrypt(user.role)
     
 @router.post("/getUserInfo/")
 def get_user_info( db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -113,17 +113,17 @@ def get_user_info( db: Session = Depends(get_db), current_user: User = Depends(g
         raise HTTPException(status_code=404, detail=user_not_found)
     else:
         info ={"user_id": user.user_id,
-                "first_name":user.first_name,
-                "last_name":user.last_name ,
-                "username":user.username ,
-                "email":user.email,
-                "phone_number": user.phone_number,
-                "role": user.role}
-        if user.role == 'doctor':
+                "first_name":decrypt(user.first_name),
+                "last_name":decrypt(user.last_name),
+                "username":decrypt(user.username) ,
+                "email":decrypt(user.email),
+                "phone_number": decrypt(user.phone_number),
+                "role": decrypt(user.role)}
+        if user.role_hash == hash_lookup('doctor'):
             doctor = db.query(Doctor).filter(Doctor.user_id == current_user.user_id, Doctor.is_doctor == 1).first()
             if doctor:
                 info['doctor_id'] = doctor.doctor_id
-                info['doctor_specialty'] = doctor.doctor_specialty
+                info['doctor_specialty'] = decrypt(doctor.doctor_specialty)
     return JSONResponse(content=info)
 
 
@@ -139,35 +139,35 @@ def update_my_profile(
                                     User.is_valid == 1).first()
     if not user:
         raise HTTPException(status_code=403, detail=general_privileges_update)
-    if current_user.role == "doctor" and user_update.doctor_specialty:
+    if current_user.role_hash == hash_lookup("doctor") and user_update.doctor_specialty:
         doctor = db.query(Doctor).filter(Doctor.user_id == current_user.user_id, 
                                     Doctor.is_doctor == 1).first()
         if not doctor:
             raise HTTPException(status_code=403, detail=general_privileges_update)
         if user_update.doctor_specialty.upper() not in allowed_specialties:
             raise HTTPException(status_code=404, detail=invalid_doctor_specialty)
-        doctor.doctor_specialty = user_update.doctor_specialty
+        doctor.doctor_specialty = encrypt(user_update.doctor_specialty)
         db.commit()
         db.refresh(doctor)
     # Update user fields dynamically
         # get first name and last name
     if user_update.first_name:
         if user_update.first_name.isalpha():
-            current_user.first_name = user_update.first_name
+            current_user.first_name = encrypt(user_update.first_name)
         else:
             raise HTTPException(status_code=400, detail = invalid_name)
     if user_update.last_name:
         if user_update.last_name.isalpha():
-            current_user.last_name = user_update.last_name
+            current_user.last_name = encrypt(user_update.last_name)
         else: 
             raise HTTPException(status_code=400, detail = invalid_name) 
 
     if user_update.email and is_email_valid(user_update.email):
-            current_user.email = user_update.email
+            current_user.email = encrypt(user_update.email)
     if user_update.phone_number and is_phone_number_valid(user_update.phone_number):
-            current_user.phone_number = user_update.phone_number
+            current_user.phone_number = encrypt(user_update.phone_number)
     if user_update.username:
-        current_user.username = user_update.username
+        current_user.username = encrypt(user_update.username)
 
     db.commit()
     db.refresh(current_user)  # Refresh the user object with updated values

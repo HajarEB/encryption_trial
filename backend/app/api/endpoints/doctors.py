@@ -8,7 +8,7 @@ from core.utils import is_name_valid, get_current_user, get_current_admin, deact
 from models.user import User
 from models.doctor import Doctor
 from core.messages import doctor_not_found, user_not_found, admin_privileges,status_expiry_change
-
+from core.encryption import decrypt, encrypt, hash_lookup
 router = APIRouter()
 
 
@@ -21,12 +21,12 @@ def get_doctor_name_by_id(doctor_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.user_id == doctor.user_id).first() 
     if not user:
         raise HTTPException(status_code=404, detail=user_not_found )
-    return  f"{user.first_name} {user.last_name}"
+    return  f"{decrypt(user.first_name)} {decrypt(user.last_name)}"
 
 
 
 def get_doctor_id_by_username(doctor_username: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == doctor_username).first() 
+    user = db.query(User).filter(User.username_hash == hash_lookup(doctor_username)).first() 
     if not user:
         raise HTTPException(status_code=404, detail=user_not_found )
     doctor = db.query(Doctor).filter(Doctor.user_id == user.user_id).first()
@@ -47,11 +47,11 @@ def get_doctor_specialty_by_id(doctor_id: int,db: Session = Depends(get_db)):
     doctor = db.query(Doctor).filter(Doctor.doctor_id == doctor_id, Doctor.is_doctor ==1).first()
     if not doctor: 
         raise HTTPException(status_code=404, detail=doctor_not_found)
-    return doctor.doctor_specialty
+    return decrypt(doctor.doctor_specialty)
 
 @router.post("/getAllDoctors/")
 def get_all_doctors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role== "admin":
+    if current_user.role_hash == hash_lookup("admin"):
         info = []
         doctor_db = db.query(Doctor).all()
         for doctor in doctor_db:
@@ -61,11 +61,11 @@ def get_all_doctors(db: Session = Depends(get_db), current_user: User = Depends(
                 raise HTTPException(status_code=404, detail=user_not_found)
             app_data = {"doctor_id": doctor.doctor_id,
                         "doctor_name":doctor_name,
-                        "username":user.username,
+                        "username":decrypt(user.username),
                         "status_expiry": doctor.status_expiry,
-                        "email":user.email,
-                        "specialty": doctor.doctor_specialty,
-                        "phone_number": user.phone_number}
+                        "email":decrypt(user.email),
+                        "specialty": decrypt(doctor.doctor_specialty),
+                        "phone_number": decrypt(user.phone_number)}
             info.append(app_data)
         return info
     raise HTTPException(status_code=404, detail=admin_privileges)
@@ -78,7 +78,7 @@ def get_all_specialty(db: Session = Depends(get_db), current_user: User = Depend
             Doctor.status_expiry > datetime.now(timezone.utc)
         )
         ).distinct().all()
-    return [specialty[0] for specialty in specialty_list]
+    return [decrypt(specialty[0]) for specialty in specialty_list]
 
 @router.put("/update_doctor_status_expiry/")
 def update_doctor_status_expiry(doctor_info: AdminUpdateDoctor, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):

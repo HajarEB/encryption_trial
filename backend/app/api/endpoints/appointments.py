@@ -9,6 +9,7 @@ from models.patient import Patient
 from .patients import get_patient_name_by_id, get_patient_id_by_user_id, is_patient_valid, get_patient_id
 from .doctors import get_doctor_name_by_id,  get_doctor_id_by_user_id, is_doctor_valid, get_doctor_id, get_doctor_specialty_by_id
 from core.utils import is_user_valid, get_current_user, get_current_admin
+from core.encryption import hash_lookup, encrypt, decrypt
 from datetime import date, datetime, time, timedelta, timezone
 from core.messages import doctor_not_found, user_not_found, patient_not_found,appointment_not_found, non_updatable_appointment, admin_privileges, doctor_privileges, invalid_chosen_status, patient_privileges, invalid_date, general_privileges_update, invalid_status
 router = APIRouter()
@@ -36,7 +37,7 @@ def check_appointments():
 
 @router.post("/getAllAppointments/")
 def get_all_appointments(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role== "admin":
+    if current_user.role_hash== hash_lookup("admin"):
         info = []
         appointment_db = db.query(Appointment).all()
         for appointment in appointment_db:
@@ -45,13 +46,13 @@ def get_all_appointments(db: Session = Depends(get_db), current_user: User = Dep
             app_data = {"appointment_id": appointment.appointment_id,
                         "patient_name":patient_name,
                         "doctor_name":doctor_name,
-                        "description":appointment.description,
+                        "description":decrypt(appointment.description),
                         "date_time":appointment.date_time,
                         "status": appointment.status }
             info.append(app_data)
 
         return info
-    raise HTTPException(status_code=404, detail= admin_privileges)
+    raise HTTPException(status_code=404, detail = admin_privileges)
 
 @router.post("/getDoctorAppointments/")
 def get_doctor_appointments(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -62,7 +63,7 @@ def get_doctor_appointments(db: Session = Depends(get_db), current_user: User = 
         patient_name = get_patient_name_by_id(appointment.patient_id,db)
         app_data = {"appointment_id": appointment.appointment_id,
                 "patient_name":patient_name,
-                "description":appointment.description,
+                "description":decrypt(appointment.description),
                 "date_time":appointment.date_time,
                 "status": appointment.status}
         info.append(app_data)
@@ -80,8 +81,8 @@ def get_patient_appointments(db: Session = Depends(get_db), current_user: User =
         doctor_specialty = get_doctor_specialty_by_id(appointment.doctor_id,db)
         app_data = {"appointment_id": appointment.appointment_id,
                 "doctor_name":doctor_name,
-                "description":appointment.description,
-                "specialty": doctor_specialty,
+                "description":decrypt(appointment.description),
+                "specialty":doctor_specialty,
                 "date_time":appointment.date_time,
                 "status": appointment.status }
         info.append(app_data)
@@ -113,7 +114,7 @@ def admin_update_appointment(data: admin_appointment_update,
             raise HTTPException(status_code=404, detail=doctor_not_found) 
 
         if data.description:
-            appointment.description = data.description
+            appointment.description = encrypt(data.description)
             
         if data.date_time:
             if data.date_time <  datetime.now((timezone.utc)):
@@ -158,14 +159,14 @@ def user_update_appointment(data: user_appointment_update,
             raise HTTPException(status_code=404, detail=non_updatable_appointment)
     else:
         # Ensure that the logged-in user is a doctor/ patient and they are updating their own information
-        if current_user.role == "doctor":
+        if current_user.role_hash == hash_lookup("doctor"):
             doctor_id = is_doctor_valid(current_user.user_id, db)
             if doctor_id == 0:
                 raise HTTPException(status_code=404, detail= doctor_privileges)
             if current_appointment.doctor_id != doctor_id:
                 raise HTTPException(status_code=404, detail= general_privileges_update)
         
-        elif current_user.role == "patient":
+        elif current_user.role_hash == hash_lookup("patient"):
             patient_id = is_patient_valid(current_user.user_id, db)
             if patient_id == 0:
                 raise HTTPException(status_code=404, detail=patient_privileges)
@@ -183,7 +184,7 @@ def user_update_appointment(data: user_appointment_update,
         
         
         if data.description:
-            current_appointment.description = data.description
+            current_appointment.description = encrypt(data.description)
             
         if data.date_time:
             if data.date_time <  datetime.now(timezone.utc):
@@ -194,7 +195,7 @@ def user_update_appointment(data: user_appointment_update,
                 
             
         if data.status:
-            if current_user.role == "patient" and (data.status.upper() != "CANCELLED" and data.status.upper() != current_appointment.status.upper() ):
+            if current_user.role_hash == hash_lookup("patient") and (data.status.upper() != "CANCELLED" and data.status.upper() != current_appointment.status.upper() ):
                 raise HTTPException(status_code=404, detail = invalid_status)
             
             if data.status.upper() not in allowed_status: #doctor is the one updating the status
@@ -205,8 +206,8 @@ def user_update_appointment(data: user_appointment_update,
             
             if data.status.upper() == "IN PROGRESS" and data.date_time != datetime.now(timezone.utc):
                 raise HTTPException(status_code=404, detail = invalid_chosen_status + data.status.upper() )
-            if date_updated:
-                current_appointment.status = "SCHEDULED"   # appointment still needs to be confirmed by the doctor/patient
+            if date_updated and data.status != "CANCELLED" and  data.status != current_appointment.status and current_user.role_hash == hash_lookup("patient"):
+                current_appointment.status = "SCHEDULED"  
             else:
                 current_appointment.status = data.status.upper()
         
@@ -311,9 +312,9 @@ def get_available_appointment(check_available_appointment: get_available_appoint
     details = []
 
     if check_available_appointment.doctor_id == 0:
-        doctors_db = db.query(Doctor).filter(Doctor.doctor_specialty==check_available_appointment.specialty, Doctor.is_doctor == 1).all()
+        doctors_db = db.query(Doctor).filter(Doctor.doctor_specialty_hash == hash_lookup(check_available_appointment.specialty), Doctor.is_doctor == 1).all()
     else:
-        doctors_db = db.query(Doctor).filter(Doctor.doctor_id==check_available_appointment.doctor_id).all()
+        doctors_db = db.query(Doctor).filter(Doctor.doctor_id == check_available_appointment.doctor_id).all()
 
     for doctor in doctors_db:
         doctor_name = get_doctor_name_by_id(doctor.doctor_id,db)
@@ -349,7 +350,7 @@ def get_available_appointment(check_available_appointment: get_available_appoint
 
 
 def get_doctor_id_by_username(username:str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username, User.is_valid == 1).first()
+    user = db.query(User).filter(User.username_hash == hash_lookup(username), User.is_valid == 1).first()
     if not user:
         raise HTTPException(status_code=404, detail=doctor_not_found)
     doctor = db.query(Doctor).filter(Doctor.user_id== user.user_id).first()
@@ -360,15 +361,15 @@ def get_doctor_id_by_username(username:str, db: Session = Depends(get_db)):
     
 @router.post("/CreateNewAppointment/")
 def create_appointment(user_data: create_new_appointment, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role == "admin":
+    if current_user.role_hash == hash_lookup("admin"):
         patient_id = user_data.patient_id
         # check if patient is still valid
         patient_in_db = db.query(Patient).filter(Patient.patient_id==patient_id).first()
         if patient_in_db.is_patient == 0:
             return {"message": "Patient not found"}
-    elif current_user.role == "patient":
+    elif current_user.role_hash == hash_lookup("patient"):
         patient_id = get_patient_id_by_user_id(current_user.user_id,db)
-    elif current_user.role == "doctor": # if doctor want to book appointment as a patient
+    elif current_user.role_hash == hash_lookup("doctor"): # if doctor want to book appointment as a patient
         patient_id = get_doctor_id_by_user_id(current_user.user_id,db)
     doctor_id =  user_data.doctor_id
     date_time = combine_date_time_slot(user_data.date, user_data.time_slot)
@@ -383,7 +384,7 @@ def create_appointment(user_data: create_new_appointment, db: Session = Depends(
                 return {"message": "This time is reserved"}
     
     # create new appointment
-    new_appointment = Appointment(patient_id = patient_id, doctor_id= doctor_id, description = user_data.description, date_time =  date_time)
+    new_appointment = Appointment(patient_id = patient_id, doctor_id= doctor_id, description = encrypt(user_data.description), date_time =  date_time)
     db.add(new_appointment)
     db.commit()
     db.refresh(new_appointment)
