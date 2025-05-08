@@ -147,6 +147,7 @@ def update_my_profile(
         if user_update.doctor_specialty.upper() not in allowed_specialties:
             raise HTTPException(status_code=404, detail=invalid_doctor_specialty)
         doctor.doctor_specialty = encrypt(user_update.doctor_specialty)
+        doctor.doctor_specialty_hash = hash_lookup(user_update.doctor_specialty)
         db.commit()
         db.refresh(doctor)
     # Update user fields dynamically

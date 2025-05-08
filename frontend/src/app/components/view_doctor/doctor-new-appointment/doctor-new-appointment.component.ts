@@ -82,7 +82,7 @@ export class DoctorNewAppointmentComponent {
     if (this.createForm.doctor_name != "", this.createForm.time_slot != 0){
 
       this.configService.CreateNewAppointment(this.createForm).subscribe((res: any) => {
-        alert(res.message)
+        alert(res)
       this.getAvailableAppointment()
       this.router.navigateByUrl("/home");
      }, (error: any) => {
@@ -90,7 +90,7 @@ export class DoctorNewAppointmentComponent {
        console.error('Error Fetching Data:', error);
      });
     } else {
-      alert("Select one doctor and suitable time slot")
+      alert("Select suitable time slot")
     }
   }
 }

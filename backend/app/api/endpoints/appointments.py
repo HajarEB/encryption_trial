@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from models.doctor import Doctor
 from database import SessionLocal, get_db
 from sqlalchemy.orm import Session
@@ -6,12 +7,12 @@ from schemas.appointment import  admin_appointment_update, get_available_appoint
 from models.appointment import Appointment
 from models.user import User
 from models.patient import Patient
-from .patients import get_patient_name_by_id, get_patient_id_by_user_id, is_patient_valid, get_patient_id
+from .patients import get_patient_name_by_id, get_patient_id_by_user_id, is_patient_valid, get_patient_id, get_patient_status_expiry_by_id
 from .doctors import get_doctor_name_by_id,  get_doctor_id_by_user_id, is_doctor_valid, get_doctor_id, get_doctor_specialty_by_id
 from core.utils import is_user_valid, get_current_user, get_current_admin
 from core.encryption import hash_lookup, encrypt, decrypt
 from datetime import date, datetime, time, timedelta, timezone
-from core.messages import doctor_not_found, user_not_found, patient_not_found,appointment_not_found, non_updatable_appointment, admin_privileges, doctor_privileges, invalid_chosen_status, patient_privileges, invalid_date, general_privileges_update, invalid_status
+from core.messages import doctor_not_found, user_not_found, patient_not_found,appointment_not_found, non_updatable_appointment, admin_privileges, doctor_privileges, invalid_chosen_status, patient_privileges, invalid_date, general_privileges_update, invalid_status, appointment_created, appointment_invalid,appointment_reserved, expired_before_appoinment
 router = APIRouter()
 
 allowed_status = ['SCHEDULED', 'CANCELLED', 'IN PROGRESS', 'COMPLETED', 'CONFIRMED']
@@ -312,9 +313,17 @@ def get_available_appointment(check_available_appointment: get_available_appoint
     details = []
 
     if check_available_appointment.doctor_id == 0:
-        doctors_db = db.query(Doctor).filter(Doctor.doctor_specialty_hash == hash_lookup(check_available_appointment.specialty), Doctor.is_doctor == 1).all()
+        print(hash_lookup(check_available_appointment.specialty))
+        doctors_db = db.query(Doctor).filter(Doctor.doctor_specialty_hash == hash_lookup(check_available_appointment.specialty),
+                                             Doctor.is_doctor == 1,
+                                             or_(check_available_appointment.date < Doctor.status_expiry,
+                                                 Doctor.status_expiry == None)
+                                              ).all()
     else:
-        doctors_db = db.query(Doctor).filter(Doctor.doctor_id == check_available_appointment.doctor_id).all()
+        doctors_db = db.query(Doctor).filter(Doctor.doctor_id == check_available_appointment.doctor_id,
+                                             or_(check_available_appointment.date < Doctor.status_expiry,
+                                                 Doctor.status_expiry == None)
+                                            ).all()
 
     for doctor in doctors_db:
         doctor_name = get_doctor_name_by_id(doctor.doctor_id,db)
@@ -366,14 +375,23 @@ def create_appointment(user_data: create_new_appointment, db: Session = Depends(
         # check if patient is still valid
         patient_in_db = db.query(Patient).filter(Patient.patient_id==patient_id).first()
         if patient_in_db.is_patient == 0:
-            return {"message": "Patient not found"}
+            return patient_not_found
     elif current_user.role_hash == hash_lookup("patient"):
         patient_id = get_patient_id_by_user_id(current_user.user_id,db)
-    elif current_user.role_hash == hash_lookup("doctor"): # if doctor want to book appointment as a patient
-        patient_id = get_doctor_id_by_user_id(current_user.user_id,db)
+    elif current_user.role_hash == hash_lookup("doctor"):
+        patient_id = user_data.patient_id
     doctor_id =  user_data.doctor_id
     date_time = combine_date_time_slot(user_data.date, user_data.time_slot)
+
+    # check if expiry status is before appointment -> invalid appointment
+    if date_time > get_patient_status_expiry_by_id(patient_id, db):
+        return expired_before_appoinment
     
+    # check if that slot is passed
+    if date_time < datetime.now():
+        return appointment_invalid
+    
+
     # check if that slot is already reserved
     appointments_db = db.query(Appointment).filter(Appointment.doctor_id == doctor_id,
                                                     Appointment.date_time >= datetime.combine(user_data.date, datetime.min.time()),  # Convert date to datetime
@@ -381,13 +399,13 @@ def create_appointment(user_data: create_new_appointment, db: Session = Depends(
     if appointments_db:
         for appointment in appointments_db:
             if split_time_to_slot(appointment.date_time) == user_data.time_slot:
-                return {"message": "This time is reserved"}
+                return appointment_reserved
     
     # create new appointment
     new_appointment = Appointment(patient_id = patient_id, doctor_id= doctor_id, description = encrypt(user_data.description), date_time =  date_time)
     db.add(new_appointment)
     db.commit()
     db.refresh(new_appointment)
-    return {"message": "Appointment Successfully Added"}
+    return appointment_created
 
 

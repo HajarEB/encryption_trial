@@ -115,5 +115,9 @@ def get_patient_id(user_id: int, db: Session = Depends(get_db) ):
         raise HTTPException(status_code=404, detail=patient_not_found)
     return patient.patient_id
 
-
+def get_patient_status_expiry_by_id(patient_id: int, db: Session = Depends(get_db) ):
+    patient = db.query(Patient).filter(Patient.patient_id == patient_id, Patient.is_patient == 1).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail=patient_not_found)
+    return patient.status_expiry
     

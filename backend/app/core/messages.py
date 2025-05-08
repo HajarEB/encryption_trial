@@ -35,3 +35,8 @@ token_decode = "Could Not Decode Token"
 authentication_error = "Authentication is Needed"
 database_error = "Database Error"
 already_logged_out = "User is Already Logged Out"
+
+expired_before_appoinment = "Expiry status is set before appointment"
+appointment_created = "Appointment Successfully Added"
+appointment_reserved = "This time is reserved"
+appointment_invalid = "This time is no longer valid"
