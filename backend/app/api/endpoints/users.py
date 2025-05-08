@@ -167,6 +167,7 @@ def update_my_profile(
             current_user.email = encrypt(user_update.email)
     if user_update.phone_number and is_phone_number_valid(user_update.phone_number):
             current_user.phone_number = encrypt(user_update.phone_number)
+            current_user.phone_number_hash = hash_lookup(user_update.phone_number)
     if user_update.username:
         current_user.username = encrypt(user_update.username)
 

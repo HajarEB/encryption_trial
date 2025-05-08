@@ -38,7 +38,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         name = user_data.first_name + ' '+ user_data.last_name
         if is_name_valid(name):
             if  is_email_valid(user_data.email) and is_phone_number_valid(user_data.phone_number):
-                phone_number_hash = user_data.phone_number
+                phone_number_hash = hash_lookup(user_data.phone_number)
                 existing_phone_number = db.query(User).filter(User.phone_number_hash == phone_number_hash).first()
                 if existing_phone_number:
                     raise HTTPException(status_code=400, detail=phone_number_used)

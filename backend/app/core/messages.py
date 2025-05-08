@@ -36,7 +36,7 @@ authentication_error = "Authentication is Needed"
 database_error = "Database Error"
 already_logged_out = "User is Already Logged Out"
 
-expired_before_appoinment = "Expiry status is set before appointment"
+expired_before_appoinment = "Expiry status is set before appointment time"
 appointment_created = "Appointment Successfully Added"
 appointment_reserved = "This time is reserved"
 appointment_invalid = "This time is no longer valid"

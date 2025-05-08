@@ -74,7 +74,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    # verify token
+    # verify expired session token
     try:
         if is_logged_out(token, db):
             raise HTTPException(status_code=400, detail=authentication_error)

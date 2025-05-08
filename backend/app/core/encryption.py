@@ -2,12 +2,13 @@
 from cryptography.fernet import Fernet
 from hashlib import sha256
 import base64
+from core.config import settings
 
 # Get the JWT_SECRET_KEY from the environment
-JWT_SECRET_KEY = "Thanhbjim@$@&^@&%^&RFghgjvHajar"
+DB_SECRET_KEY = settings.DB_SECRET_KEY
 
 # Hash JWT_SECRET_KEY to make a 32-byte key for Fernet encryption
-hashed_key = sha256(JWT_SECRET_KEY.encode()).digest()
+hashed_key = sha256(DB_SECRET_KEY.encode()).digest()
 cipher = Fernet(base64.urlsafe_b64encode(hashed_key))
 
 def encrypt(text: str) -> str:

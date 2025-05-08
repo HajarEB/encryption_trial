@@ -384,8 +384,10 @@ def create_appointment(user_data: create_new_appointment, db: Session = Depends(
     date_time = combine_date_time_slot(user_data.date, user_data.time_slot)
 
     # check if expiry status is before appointment -> invalid appointment
-    if date_time > get_patient_status_expiry_by_id(patient_id, db):
-        return expired_before_appoinment
+    patient_expired_date = get_patient_status_expiry_by_id(patient_id, db)
+    if patient_expired_date:
+        if date_time > patient_expired_date:
+            return expired_before_appoinment
     
     # check if that slot is passed
     if date_time < datetime.now():
@@ -398,7 +400,7 @@ def create_appointment(user_data: create_new_appointment, db: Session = Depends(
                                                     Appointment.date_time < datetime.combine(user_data.date, datetime.max.time())).all()
     if appointments_db:
         for appointment in appointments_db:
-            if split_time_to_slot(appointment.date_time) == user_data.time_slot:
+            if split_time_to_slot(appointment.date_time) == user_data.time_slot and appointment.status != "CANCELLED":
                 return appointment_reserved
     
     # create new appointment

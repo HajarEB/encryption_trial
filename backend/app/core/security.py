@@ -10,10 +10,8 @@ from core.messages import expired_token, invalid_token
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-REFRESH_TOKEN_EXPIRE_MINUTES = settings.REFRESH_TOKEN_EXPIRE_MINUTES
 ALGORITHM = settings.ALGORITHM
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
-JWT_REFRESH_SECRET_KEY = settings.JWT_REFRESH_SECRET_KEY
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 

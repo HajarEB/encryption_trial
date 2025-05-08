@@ -25,19 +25,23 @@ export class SignUpComponent{
   }
 
   onSignUp(){
-    debugger;
-    const formValue = this.registerForm;
-    this.configService.register(formValue).subscribe((res:any)=>{
-      alert(res.message)
-      this.router.navigateByUrl("login")
-    }, (error: HttpErrorResponse)=>{
-      console.error(error);
-      if (error.error && error.error.detail) {
-        alert(`Signup failed: ${error.error.detail}`);
-      } else {
-        alert("Signup failed: An unexpected error occurred.");
-      }
-    })
+    if (this.registerForm.username != "", this.registerForm.password != ""){
+      const formValue = this.registerForm;
+      this.configService.register(formValue).subscribe((res:any)=>{
+        alert(res.message)
+        this.router.navigateByUrl("login")
+      }, (error: HttpErrorResponse)=>{
+        console.error(error);
+        if (error.error && error.error.detail) {
+          alert(`Signup failed: ${error.error.detail}`);
+        } else {
+          alert("Signup failed: An unexpected error occurred.");
+        }
+      })
+    } else {
+      alert("Username and password required")
+    }
+    
   }
 
 }
